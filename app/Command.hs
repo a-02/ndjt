@@ -47,3 +47,8 @@ load file conn = do
       loadMsg = "renoise.app():load_song(" ++ file ++ ")"
   liftIO $ tcp_send_packet conn (Packet_Message (message save []))
   liftIO $ tcp_send_packet conn (Packet_Message (message loadMsg []))
+
+addScheduledSequence :: Int -> Tcp -> App ()
+addScheduledSequence pttrn conn = do
+  let msg = "renoise.song().transport.add_scheduled_sequence(" ++ show pttrn ++ ")"
+  liftIO $ tcp_send_packet conn (Packet_Message $ toMessage msg)
