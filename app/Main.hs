@@ -18,6 +18,7 @@ import Colog.Core.IO
 import GHC.Bits
 import Data.Bifunctor
 import qualified Data.ByteString.Char8 as BSC8
+import Data.Foldable
 import Data.Function hiding (on)
 import Data.Digest.Adler32
 import qualified Data.List.NonEmpty as NE
@@ -26,7 +27,6 @@ import Data.Time
 import Data.WideWord.Word256
 
 import Graphics.Vty as Vty
-import GHC.List hiding (foldl1)
 
 import Sound.Osc
 
@@ -72,7 +72,7 @@ main = do
 vtyGO :: App ()
 vtyGO = do
   info <- ask
-  mode <- get
+--  mode <- get
   k <- liftIO $ collapseEventToKey <$> nextEvent info.vty
   either (\x -> logStringHandle info.logMainHandle <& x) interpretKey k
   unless (k == Left "escape") vtyGO
@@ -80,7 +80,7 @@ vtyGO = do
 collapseEventToKey :: Event -> Either String Key
 collapseEventToKey (EvKey KEsc []) = Left "escape"
 collapseEventToKey (EvKey k _) = Right k
-collapseEventToKey a = Left $ "got " ++ (show a)
+collapseEventToKey a = Left $ "got " ++ show a
 
 interpretKey :: Key -> App ()
 interpretKey key = do
@@ -165,7 +165,12 @@ interpretQueueBuffer :: Zipper Int -> Zipper (Tcp, Bool) -> Key -> App ()
 interpretQueueBuffer qb decks key = do
   vty <- (.vty) <$> ask
   let go qb' decks' = liftIO (either error id . collapseEventToKey <$> nextEvent vty) >>= interpretQueueBuffer qb' decks'
+      line1 = Vty.string (defAttr `withForeColor` cyan) (show qb)
+      line2 = Vty.string (defAttr `withForeColor` magenta) (show $ first tcpHandle <$> decks)
+      line3 = Vty.string (defAttr `withForeColor` yellow) "You are in Queue Buffer mode."
+  liftIO $ update vty (picForImage $ foldl1 vertJoin [line1,line2,line3])
   case key of
+    KEnter -> mapM_ (\(tcp, active) -> when active (addScheduledSequence (toList qb) tcp)) decks
     KRight -> maybe (return ()) (go qb) (right decks)
     KLeft -> maybe (return ()) (go qb) (left decks)
     KUp -> go qb $ on decks
@@ -195,6 +200,7 @@ interpretInputAsHash ih key = do
       mapM_ (playTracks adler) decks
     _ -> return ()
 
+{-
 -- "outer" meaning "not needing mode-specific things"
 updateOuterDisplay :: OperatingMode -> App ()
 updateOuterDisplay = \case
@@ -202,6 +208,7 @@ updateOuterDisplay = \case
   InputAsHash ih -> undefined
   TreatAsBitstring bs -> undefined
   QueueBuffer qb -> undefined
+-}
 
 
 changeModeErrorMessage :: String
