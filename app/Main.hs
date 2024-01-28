@@ -84,38 +84,64 @@ collapseEventToKey a = Left $ "got " ++ show a
 
 interpretKey :: Key -> App ()
 interpretKey key = do
-  mode <- get
-  case key of
-    (KFun i) -> changeMode i
-    _ -> modeBranch key mode
-
-modeBranch :: Key -> OperatingMode -> App ()
-modeBranch key mode = do
   decks <- (.deckSockets) <$> ask
-  let fileLoaderActiveDecks = fromNonEmpty . NE.zip decks $ fix (False NE.<|)
+  let activeDecks = fromNonEmpty . NE.zip decks $ fix (False NE.<|)
+  case key of
+    (KFun i) -> changeMode i activeDecks
+    _ -> modeBranch key activeDecks
+
+modeBranch :: Key -> Zipper (Tcp, Bool) -> App ()
+modeBranch key decks = do
+  mode <- get
   key & case mode of
-    FileLoader fl -> interpretFileLoader fl fileLoaderActiveDecks
+    FileLoader fl -> interpretFileLoader fl decks
     InputAsHash ih -> interpretInputAsHash ih
     TreatAsBitstring bs -> interpretTreatAsBitstring bs
-    QueueBuffer qb -> interpretQueueBuffer qb fileLoaderActiveDecks
+    QueueBuffer qb -> interpretQueueBuffer qb decks
 
-changeMode :: Int -> App ()
-changeMode = \case
-  1 -> put $ FileLoader []
-  2 -> put $ InputAsHash []
-  3 -> put $ TreatAsBitstring zeroWord256
-  4 -> put . QueueBuffer $ listToZipper [0]
-  5 -> put . QueueBuffer $ listToZipper [0]
-  6 -> put . QueueBuffer $ listToZipper [0]
-  7 -> put . QueueBuffer $ listToZipper [0]
-  8 -> put . QueueBuffer $ listToZipper [0]
-  9 -> put . QueueBuffer $ listToZipper [0]
-  10 -> put . QueueBuffer $ listToZipper [0]
-  11 -> put . QueueBuffer $ listToZipper [0]
-  12 -> put . QueueBuffer $ listToZipper [0]
-  _   -> do handle <- (.logMainHandle) <$> ask -- Woah!
-            logStringHandle handle <& changeModeErrorMessage
-            liftIO exitFailure
+changeMode :: Int -> Zipper (Tcp, Bool) -> App ()
+changeMode i decks = 
+  do vty <- (.vty) <$> ask 
+     case i of
+          1 -> do 
+            put $ FileLoader []
+            drawFileLoader [] decks
+          2 -> do 
+            put $ InputAsHash []
+            drawInputHash [] []
+          3 -> do
+            put $ TreatAsBitstring zeroWord256
+            drawBitstring zeroWord256
+          4 -> do
+            put . QueueBuffer $ listToZipper [0]
+            drawQueueBuffer (listToZipper [0]) decks
+          5 -> do 
+            put $ FileLoader []
+            drawFileLoader [] decks
+          6 -> do 
+            put $ InputAsHash []
+            drawInputHash [] [] 
+          7 -> do
+            put $ TreatAsBitstring zeroWord256
+            drawBitstring zeroWord256
+          8 -> do
+            put . QueueBuffer $ listToZipper [0]
+            drawQueueBuffer (listToZipper [0]) decks
+          9 -> do 
+            put $ FileLoader []
+            drawFileLoader [] decks
+          10 -> do 
+            put $ InputAsHash []
+            drawInputHash [] []
+          11 -> do
+            put $ TreatAsBitstring zeroWord256
+            drawBitstring zeroWord256 
+          12 -> do
+            put . QueueBuffer $ listToZipper [0]
+            drawQueueBuffer (listToZipper [0]) decks
+          _   -> do handle <- (.logMainHandle) <$> ask -- Woah!
+                    logStringHandle handle <& changeModeErrorMessage
+                    liftIO exitFailure
 
 interpretFileLoader :: String -> Zipper (Tcp, Bool) -> Key -> App ()
 interpretFileLoader file deckActives key = do
@@ -147,11 +173,8 @@ drawFileLoader file deckActives = do
 
 interpretTreatAsBitstring :: Word256 -> Key -> App ()
 interpretTreatAsBitstring w256 key = do
-  let line1 = Vty.string (defAttr `withForeColor` blue) (show w256)
-      line2 = Vty.string (defAttr `withForeColor` yellow) "You are in Bitstring mode."
   decks <- (.deckSockets) <$> ask
-  vty <- (.vty) <$> ask
-  liftIO $ update vty (picForImage $ foldl1 vertJoin [line1,line2])
+  drawBitstring w256
   mapM_ (playTracks w256) decks
   case key of
     KChar 'q' -> put (TreatAsBitstring $ complement w256)
@@ -161,14 +184,18 @@ interpretTreatAsBitstring w256 key = do
     KChar 'D' -> put (TreatAsBitstring $ rotateR w256 10)
     _ -> return ()
 
+drawBitstring :: Word256 -> App ()
+drawBitstring w256 = do
+  let line1 = Vty.string (defAttr `withForeColor` blue) (show w256)
+      line2 = Vty.string (defAttr `withForeColor` yellow) "You are in Bitstring mode."
+  vty <- (.vty) <$> ask
+  liftIO $ update vty (picForImage $ foldl1 vertJoin [line1,line2])
+  
+
 interpretQueueBuffer :: Zipper Int -> Zipper (Tcp, Bool) -> Key -> App ()
 interpretQueueBuffer qb decks key = do
   vty <- (.vty) <$> ask
   let go qb' decks' = liftIO (either error id . collapseEventToKey <$> nextEvent vty) >>= interpretQueueBuffer qb' decks'
-      line1 = Vty.string (defAttr `withForeColor` cyan) (show qb)
-      line2 = Vty.string (defAttr `withForeColor` magenta) (show $ first tcpHandle <$> decks)
-      line3 = Vty.string (defAttr `withForeColor` yellow) "You are in Queue Buffer mode."
-  liftIO $ update vty (picForImage $ foldl1 vertJoin [line1,line2,line3])
   case key of
     KEnter -> mapM_ (\(tcp, active) -> when active (addScheduledSequence (toList qb) tcp)) decks
     KRight -> maybe (return ()) (go qb) (right decks)
@@ -183,22 +210,34 @@ interpretQueueBuffer qb decks key = do
     KChar 'S' -> put (QueueBuffer $ add -10 qb)
     _ -> return ()
 
+drawQueueBuffer :: Zipper Int -> Zipper (Tcp, Bool) -> App ()
+drawQueueBuffer qb decks = do
+  vty <- (.vty) <$> ask
+  let line1 = Vty.string (defAttr `withForeColor` cyan) (show qb)
+      line2 = Vty.string (defAttr `withForeColor` magenta) (show $ first tcpHandle <$> decks)
+      line3 = Vty.string (defAttr `withForeColor` yellow) "You are in Queue Buffer mode."
+  liftIO $ update vty (picForImage $ foldl1 vertJoin [line1,line2,line3])
+
 interpretInputAsHash :: String -> Key -> App ()
 interpretInputAsHash ih key = do
+  let msg c = "MESSAGE --> " ++ ih ++ c
+      adler c = adler32 $ BSC8.pack (ih ++ c)
+      adlerDigest = "ADLER-32 HASH --> " ++ show (adler [])
+  drawInputHash (msg []) adlerDigest 
   case key of 
     (KChar ch) -> do
-      let msg = "MESSAGE --> " ++ ih ++ pure ch
-          adler = adler32 $ BSC8.pack msg
-          adlerDigest = "ADLER-32 HASH --> " ++ show adler
-          msgLine = Vty.string (defAttr `withForeColor` cyan) msg
-          adlerLine = Vty.string (defAttr `withForeColor` magenta) (show adlerDigest)
-          statsLine = Vty.string (defAttr `withForeColor` yellow) "You are in Adler-32 mode."
-      put $ InputAsHash msg
+      put $ InputAsHash (msg [ch])
       decks <- (.deckSockets) <$> ask
-      vty <- (.vty) <$> ask
-      liftIO $ update vty (picForImage $ foldl1 vertJoin [msgLine,adlerLine,statsLine])
-      mapM_ (playTracks adler) decks
+      mapM_ (playTracks $ adler [ch]) decks
     _ -> return ()
+
+drawInputHash :: String -> String -> App ()
+drawInputHash msg adler = do
+  vty <- (.vty) <$> ask
+  let msgLine = Vty.string (defAttr `withForeColor` cyan) msg
+      adlerLine = Vty.string (defAttr `withForeColor` magenta) (show adler)
+      statsLine = Vty.string (defAttr `withForeColor` yellow) "You are in Adler-32 mode."
+  liftIO $ update vty (picForImage $ foldl1 vertJoin [msgLine,adlerLine,statsLine])
 
 {-
 -- "outer" meaning "not needing mode-specific things"
@@ -227,12 +266,3 @@ add x z = replace ((+ x) . current $ z) z
 
 off :: Bifunctor f => Zipper (f a Bool) -> Zipper (f a Bool)
 off z = replace (second (const False) $ current z) z
-
-{--
-instance Monoid a => Monoid (Zipper a) where
-  mempty = Z.fromNonEmpty . NE.fromList $ [mempty]
-  mappend = (<>) -- oh fuck i need to find out if Zipper is an applicative
-
-instance Semigroup a => Semigroup (Zipper a) where
-(<>) = undefined -- ah hell
---}
