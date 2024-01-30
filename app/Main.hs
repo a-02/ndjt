@@ -64,6 +64,7 @@ main = do
   vty <- mkVty cfg
   logStringHandle logMainHandle <& ("got" ++ show decks)
   deckSockets <- mapM (`openTcp` rnsServerPort) decks
+  drawLanding vty decks
   logStringHandle logNetworkHandle <& "successfully got deckSockets?"
   let info = NDJTInfo {vty, logMainHandle, logNetworkHandle, deckSockets}
   _ <- execRWST vtyGO info (FileLoader "")
@@ -170,6 +171,34 @@ drawFileLoader file deckActives = do
       line2 = Vty.string (defAttr `withForeColor` red) deckActivesShow
       line3 = Vty.string (defAttr `withForeColor` yellow) "You are in File Loader mode."
   liftIO $ update vty (picForImage $ foldl1 vertJoin [line1,line2,line3])
+
+drawLanding :: Vty -> NE.NonEmpty String -> IO ()
+drawLanding vty decks = do
+  update vty (picForImage $ rainbowImage landingText)
+  where landingText = 
+            [ "Welcome to the NKS Renoise Multitool!"
+            , "(c) Regular Normal SoftWorks, 2023-2024"
+            , "755 W. 32nd St. Chicago, IL 60609"
+            , ""
+            , "You are connected to:"
+            ] ++ NE.toList decks ++
+            [ ""
+            , "F1: File Loader mode. Use this to load XRNS files into NDJT."
+            , "F2: Adler-32 mode. Control track solos with Adler-32 hash."
+            , "F3: Bitstring mode. Control track solos as if it were a bitstring."
+            , "F4: Queue Buffer mode. Dedicated sequence scheduler."
+            , "ESC: Close NDJT."
+            ]
+
+rainbowImage :: [String] -> Image
+rainbowImage strings =
+  foldl1 vertJoin $ 
+    (\(a,b) -> Vty.string (defAttr `withForeColor` b) a) <$> zip strings allColors
+
+allColors :: [Color]
+allColors = let u3 f (a,b,c) = f a b c in
+  u3 linearColor <$> Prelude.reverse [ (i,j,k) | (i :: Int) <- [0,64..255], j <- [255,224..0], k <- [255,224..0] ]
+  -- holy shit whens the last time i used a list comprehension?
 
 interpretTreatAsBitstring :: Word256 -> Key -> App ()
 interpretTreatAsBitstring w256 key = do
