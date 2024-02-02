@@ -16,6 +16,14 @@ data OperatingMode =
   TreatAsBitstring Word256 | 
   QueueBuffer (Zipper Int)
 
+type Decks = Zipper (Tcp, Bool)
+
+-- todo: implement this everywhere
+data NDJTState = NDJTState {
+  deckSwitches :: Decks,
+  mode :: OperatingMode
+  }
+
 data NDJTInfo = NDJTInfo {
   vty :: Vty,
   logMainHandle :: Handle,

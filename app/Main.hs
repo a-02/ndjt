@@ -147,7 +147,6 @@ changeMode i decks =
 interpretFileLoader :: String -> Zipper (Tcp, Bool) -> Key -> App ()
 interpretFileLoader file deckActives key = do
   vty <- (.vty) <$> ask
-  drawFileLoader file deckActives
   let go x = do 
         k <- liftIO $ collapseEventToKey <$> nextEvent vty
         interpretFileLoader file x (either error id k) -- oops! got lazy
@@ -155,7 +154,9 @@ interpretFileLoader file deckActives key = do
   then mapM_ (\(tcp, active) -> when active (load file tcp)) deckActives
   else do
     case key of
-      KChar ch -> put (FileLoader $ file ++ [ch])
+      KChar ch -> do
+        drawFileLoader (file ++ [ch]) deckActives
+        put (FileLoader $ file ++ [ch])
       KBS -> maybe (return ()) (put . FileLoader . BSC8.unpack . fst) (BSC8.unsnoc . BSC8.pack $ file) -- ugh
       KRight -> maybe (return ()) go (right deckActives)
       KLeft -> maybe (return ()) go (left deckActives)
