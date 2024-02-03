@@ -9,14 +9,13 @@ import Colog.Core.Action
 import Colog.Core.IO
 
 import Data.Bit
-import qualified Data.Vector.Unboxed as VU
-import qualified Data.Vector as V
-import Data.Word
+import Data.Vector qualified as V
+import Data.Vector.Unboxed qualified as VU
 import Data.WideWord.Word256
+import Data.Word
 
-import Types
 import Sound.Osc
-
+import Types
 
 start :: Tcp -> App ()
 start conn = do
@@ -30,7 +29,7 @@ stop conn = do
   handle <- (.logNetworkHandle) <$> ask
   logStringHandle handle <& ("stop playing on whatever deck this is: " ++ show (tcpHandle conn))
 
-playTracks :: Integral a => a -> Tcp -> App ()
+playTracks :: (Integral a) => a -> Tcp -> App ()
 playTracks i conn = do
   let bits = VU.convert $ unBit `VU.map` castFromWords [fromIntegral i]
       mute a = "renoise.song().tracks[" ++ show a ++ "]:mute()"
