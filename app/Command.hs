@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedLists #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 
 module Command where
@@ -9,6 +10,7 @@ import Colog.Core.Action
 import Colog.Core.IO
 
 import Data.Bit
+import Data.ByteString.Char8 as BSC8
 import Data.Vector qualified as V
 import Data.Vector.Unboxed qualified as VU
 import Data.WideWord.Word256
@@ -40,12 +42,12 @@ playTracks i conn = do
 toMessage :: String -> Message
 toMessage luaExpression = message ("/renoise/evaluate" ++ luaExpression) []
 
-load :: String -> Tcp -> App ()
+load :: BSC8.ByteString -> Tcp -> App ()
 load file conn = do
   let save = "renoise.app():save_song_as(/dev/null/lol.xrns)"
-      loadMsg = "renoise.app():load_song(" ++ file ++ ")"
+      loadMsg = "renoise.app():load_song(" `BSC8.append` file `BSC8.append` ")"
   liftIO $ tcp_send_packet conn (Packet_Message (message save []))
-  liftIO $ tcp_send_packet conn (Packet_Message (message loadMsg []))
+  liftIO $ tcp_send_packet conn (Packet_Message (message (BSC8.unpack loadMsg) []))
 
 addScheduledSequence :: [Int] -> Tcp -> App ()
 addScheduledSequence queue conn = do

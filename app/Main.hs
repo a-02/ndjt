@@ -3,6 +3,7 @@
 {-# LANGUAGE NegativeLiterals #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Main where
 
@@ -107,11 +108,11 @@ changeMode i = do
     let decks = deckSwitches st
     case i of
       1 -> do
-        put $ st{mode = FileLoader []}
-        drawFileLoader [] decks
+        put $ st{mode = FileLoader ""}
+        drawFileLoader
       2 -> do
-        put $ st{mode = InputAsHash []}
-        drawInputHash [] []
+        put $ st{mode = InputAsHash ""}
+        drawInputHash "" ""
       3 -> do
         put $ st{mode = TreatAsBitstring zeroWord256}
         drawBitstring zeroWord256
@@ -119,17 +120,17 @@ changeMode i = do
         put $ st{mode = QueueBuffer $ listToZipper [0]}
         drawQueueBuffer (listToZipper [0]) decks
       5 -> do
-        drawFileLoader [] decks
+        drawFileLoader
       6 -> do
-        drawInputHash [] []
+        drawInputHash "" ""
       7 -> do
         drawBitstring zeroWord256
       8 -> do
         drawQueueBuffer (listToZipper [0]) decks
       9 -> do
-        drawFileLoader [] decks
+        drawFileLoader
       10 -> do
-        drawInputHash [] []
+        drawInputHash "" ""
       11 -> do
         drawBitstring zeroWord256
       12 -> do
@@ -148,7 +149,6 @@ interpretFileLoader file key = do
     else do
       case key of
         KChar ch -> do
-          drawFileLoader (file `BSC8.snoc` ch) st.deckSwitches
           put $ st { mode = FileLoader $ file `BSC8.snoc` ch}
         KBS -> maybe (return ()) ((\x -> put $ st { mode = FileLoader x }) . fst) (BSC8.unsnoc file) -- ugh
         KRight -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (right st.deckSwitches)
@@ -156,15 +156,22 @@ interpretFileLoader file key = do
         KUp -> put $ st { deckSwitches = on st.deckSwitches }
         KDown -> put $ st { deckSwitches = off st.deckSwitches }
         _ -> return ()
+  drawFileLoader
 
-drawFileLoader :: BSC8.ByteString -> Zipper (Tcp, Bool) -> App ()
-drawFileLoader file deckActives = do
+drawFileLoader :: App ()
+drawFileLoader = do
   vty <- (.vty) <$> ask
-  let line1 = Vty.string (defAttr `withForeColor` green) (BSC8.unpack file)
-      deckActivesShow = show $ first tcpHandle <$> deckActives
+  st <- get
+  let line1 = Vty.string (defAttr `withForeColor` green) (fromFileLoader st.mode)
+      deckActivesShow = show $ first tcpHandle <$> st.deckSwitches
       line2 = Vty.string (defAttr `withForeColor` red) deckActivesShow
       line3 = Vty.string (defAttr `withForeColor` yellow) "You are in File Loader mode."
   liftIO $ update vty (picForImage $ foldl1 vertJoin [line1, line2, line3])
+
+fromFileLoader :: OperatingMode -> String
+fromFileLoader = \case
+  FileLoader fl -> BSC8.unpack fl
+  _ -> ""
 
 drawLanding :: Vty -> NE.NonEmpty String -> IO ()
 drawLanding vty decks = do
@@ -172,8 +179,8 @@ drawLanding vty decks = do
  where
   landingText =
     [ "Welcome to the NKS Renoise Multitool!"
-    , "(c) Regular Normal SoftWorks, 2023-2024"
-    , "755 W. 32nd St. Chicago, IL 60609"
+    , "(c) Infoglames, 2023-2024"
+    , "5000 S. Halsted St. Chicago, IL 60609"
     , ""
     , "You are connected to:"
     ]
@@ -194,21 +201,22 @@ rainbowImage strings =
 allColors :: [Color]
 allColors =
   let u3 f (a, b, c) = f a b c
-   in u3 linearColor <$> Prelude.reverse [(i, j, k) | (i :: Int) <- [0, 64 .. 255], j <- [255, 224 .. 0], k <- [255, 224 .. 0]]
+   in u3 linearColor <$> Prelude.reverse [(i, j, k) | (i :: Int) <- [0, 64 .. 255], j <- [255, 224 .. 0], k <- [0, 64 .. 255]]
 
 -- holy shit whens the last time i used a list comprehension?
 
 interpretTreatAsBitstring :: Word256 -> Key -> App ()
 interpretTreatAsBitstring w256 key = do
   decks <- (.deckSockets) <$> ask
+  st <- get
   drawBitstring w256
   mapM_ (playTracks w256) decks
   case key of
-    KChar 'q' -> put (TreatAsBitstring $ complement w256)
-    KChar 'a' -> put (TreatAsBitstring $ rotateL w256 1)
-    KChar 'd' -> put (TreatAsBitstring $ rotateR w256 1)
-    KChar 'A' -> put (TreatAsBitstring $ rotateL w256 10)
-    KChar 'D' -> put (TreatAsBitstring $ rotateR w256 10)
+    KChar 'q' -> put $ st { mode = TreatAsBitstring $ complement w256 }
+    KChar 'a' -> put $ st { mode = TreatAsBitstring $ rotateL w256 1 }
+    KChar 'd' -> put $ st { mode = TreatAsBitstring $ rotateR w256 1 }
+    KChar 'A' -> put $ st { mode = TreatAsBitstring $ rotateL w256 10 }
+    KChar 'D' -> put $ st { mode = TreatAsBitstring $ rotateR w256 10 }
     _ -> return ()
 
 drawBitstring :: Word256 -> App ()
@@ -218,22 +226,22 @@ drawBitstring w256 = do
   vty <- (.vty) <$> ask
   liftIO $ update vty (picForImage $ foldl1 vertJoin [line1, line2])
 
-interpretQueueBuffer :: Zipper Int -> Zipper (Tcp, Bool) -> Key -> App ()
-interpretQueueBuffer qb decks key = do
+interpretQueueBuffer :: Zipper Int -> Key -> App ()
+interpretQueueBuffer qb key = do
   vty <- (.vty) <$> ask
-  let go qb' decks' = liftIO (either error id . collapseEventToKey <$> nextEvent vty) >>= interpretQueueBuffer qb' decks'
+  st <- get
   case key of
-    KEnter -> mapM_ (\(tcp, active) -> when active (addScheduledSequence (toList qb) tcp)) decks
-    KRight -> maybe (return ()) (go qb) (right decks)
-    KLeft -> maybe (return ()) (go qb) (left decks)
-    KUp -> go qb $ on decks
-    KDown -> go qb $ off decks
-    KChar 'w' -> put (QueueBuffer $ add 1 qb)
-    KChar 's' -> put (QueueBuffer $ add -1 qb)
-    KChar 'a' -> maybe (return ()) (put . QueueBuffer) (left qb)
-    KChar 'd' -> maybe (return ()) (put . QueueBuffer) (right qb)
-    KChar 'W' -> put (QueueBuffer $ add 10 qb)
-    KChar 'S' -> put (QueueBuffer $ add -10 qb)
+    KEnter -> mapM_ (\(tcp, active) -> when active (addScheduledSequence (toList qb) tcp)) st.deckSwitches
+    KRight -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (right st.deckSwitches)
+    KLeft -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (left st.deckSwitches)
+    KUp -> put $ st { deckSwitches = on st.deckSwitches }
+    KDown -> put $ st { deckSwitches = off st.deckSwitches }
+    KChar 'w' -> put $ st { mode = QueueBuffer $ add 1 qb }
+    KChar 's' -> put $ st { mode = QueueBuffer $ add -1 qb }
+    KChar 'a' -> maybe (return ()) (\x -> put $ st { mode = QueueBuffer x }) (left qb)
+    KChar 'd' -> maybe (return ()) (\x -> put $ st { mode = QueueBuffer x }) (right qb)
+    KChar 'W' -> put $ st { mode = QueueBuffer $ add 10 qb }
+    KChar 'S' -> put $ st { mode = QueueBuffer $ add -10 qb }
     _ -> return ()
 
 drawQueueBuffer :: Zipper Int -> Zipper (Tcp, Bool) -> App ()
