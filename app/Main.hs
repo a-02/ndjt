@@ -142,10 +142,12 @@ changeMode i = do
 
 interpretFileLoader :: BSC8.ByteString -> Key -> App ()
 interpretFileLoader file key = do
-  vty <- (.vty) <$> ask
+  handle <- (.logMainHandle) <$> ask
   st <- get
   if key == KEnter
-    then mapM_ (\(tcp, active) -> when active (load file tcp)) st.deckSwitches
+    then do 
+      logStringHandle handle <& "got to interpretFileLoader KEnter"
+      mapM_ (\(tcp, active) -> when active (load file tcp)) st.deckSwitches
     else do
       case key of
         KChar ch -> do

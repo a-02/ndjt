@@ -13,8 +13,6 @@ import Data.Bit
 import Data.ByteString.Char8 as BSC8
 import Data.Vector qualified as V
 import Data.Vector.Unboxed qualified as VU
-import Data.WideWord.Word256
-import Data.Word
 
 import Sound.Osc
 import Types
@@ -33,23 +31,32 @@ stop conn = do
 
 playTracks :: (Integral a) => a -> Tcp -> App ()
 playTracks i conn = do
+  handle <- (.logNetworkHandle) <$> ask
   let bits = VU.convert $ unBit `VU.map` castFromWords [fromIntegral i]
-      mute a = "renoise.song().tracks[" ++ show a ++ "]:mute()"
-      unmute a = "renoise.song().tracks[" ++ show a ++ "]:unmute()"
+      mute a = BSC8.pack $ "renoise.song().tracks[" ++ show a ++ "]:mute()"
+      unmute a = BSC8.pack $ "renoise.song().tracks[" ++ show a ++ "]:unmute()"
       actions = V.imap (\idx b -> if b then toMessage (unmute idx) else toMessage (mute idx)) bits
   liftIO . tcp_send_packet conn . p_bundle immediately $ V.toList actions
 
-toMessage :: String -> Message
-toMessage luaExpression = message ("/renoise/evaluate" ++ luaExpression) []
+toMessage :: BSC8.ByteString -> Message
+toMessage luaExpression = message "/renoise/evaluate" [AsciiString luaExpression]
 
 load :: BSC8.ByteString -> Tcp -> App ()
 load file conn = do
+  handle <- (.logNetworkHandle) <$> ask
   let save = "renoise.app():save_song_as(/dev/null/lol.xrns)"
       loadMsg = "renoise.app():load_song(" `BSC8.append` file `BSC8.append` ")"
-  liftIO $ tcp_send_packet conn (Packet_Message (message save []))
-  liftIO $ tcp_send_packet conn (Packet_Message (message (BSC8.unpack loadMsg) []))
+  logStringHandle handle <& "saving..."
+  liftIO $ tcp_send_packet conn (Packet_Message $ toMessage save)
+  logStringHandle handle <& "save successful"
+  logStringHandle handle <& "loading...l"
+  liftIO $ tcp_send_packet conn (Packet_Message $ toMessage loadMsg)
+  logStringHandle handle <& "load successfull"
 
 addScheduledSequence :: [Int] -> Tcp -> App ()
 addScheduledSequence queue conn = do
+  handle <- (.logNetworkHandle) <$> ask
   let msg i = "renoise.song().transport.add_scheduled_sequence(" ++ show i ++ ")"
-  mapM_ (\a -> liftIO $ tcp_send_packet conn (Packet_Message $ toMessage (msg a))) queue
+  mapM_ (\a -> liftIO $ 
+    tcp_send_packet conn (Packet_Message $ toMessage (BSC8.pack $ msg a))) 
+    queue
