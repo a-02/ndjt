@@ -29,6 +29,8 @@ import GHC.Bits
 
 import Graphics.Vty as Vty
 
+import Options.Applicative
+
 import Sound.Osc
 
 import System.Directory
@@ -43,14 +45,11 @@ init :: IO (NE.NonEmpty String)
 init = do
   putStr "A DECK IP: "
   deckA <- getLine
-  {-
-    putStr "B DECK IP: "
-    deckB <- getLine
-  -}
   return $ NE.fromList [deckA]
 
 main :: IO ()
 main = do
+  options <- execParser opts
   rightNow <- getCurrentTime
   let now = formatTime defaultTimeLocale "%s" rightNow
       filename = "log/ndjt_" ++ now
@@ -64,10 +63,10 @@ main = do
   cfg <- standardIOConfig
   vty <- mkVty cfg
   logStringHandle logMainHandle <& ("got" ++ show decks)
-  deckSockets <- mapM (`openTcp` rnsServerPort) decks
+  deckSockets <- mapM (`openUdp` rnsServerPort) decks
   drawLanding vty decks
   logStringHandle logNetworkHandle <& "successfully got deckSockets?"
-  let info = NDJTInfo{vty, logMainHandle, logNetworkHandle, deckSockets}
+  let info = NDJTInfo{vty, logMainHandle, logNetworkHandle, deckSockets, options}
       activeDecks = fromNonEmpty . NE.zip deckSockets $ fix (False NE.<|)
       st = NDJTState{deckSwitches = activeDecks, mode = FileLoader ""}
   _ <- execRWST vtyGO info st
@@ -147,7 +146,7 @@ interpretFileLoader file key = do
   if key == KEnter
     then do 
       logStringHandle handle <& "got to interpretFileLoader KEnter"
-      mapM_ (\(tcp, active) -> when active (load file tcp)) st.deckSwitches
+      mapM_ (\(udp, active) -> when active (load file udp)) st.deckSwitches
     else do
       case key of
         KChar ch -> do
@@ -165,7 +164,7 @@ drawFileLoader = do
   vty <- (.vty) <$> ask
   st <- get
   let line1 = Vty.string (defAttr `withForeColor` green) (fromFileLoader st.mode)
-      deckActivesShow = show $ first tcpHandle <$> st.deckSwitches
+      deckActivesShow = show $ first udpSocket <$> st.deckSwitches
       line2 = Vty.string (defAttr `withForeColor` red) deckActivesShow
       line3 = Vty.string (defAttr `withForeColor` yellow) "You are in File Loader mode."
   liftIO $ update vty (picForImage $ foldl1 vertJoin [line1, line2, line3])
@@ -233,7 +232,7 @@ interpretQueueBuffer qb key = do
   vty <- (.vty) <$> ask
   st <- get
   case key of
-    KEnter -> mapM_ (\(tcp, active) -> when active (addScheduledSequence (toList qb) tcp)) st.deckSwitches
+    KEnter -> mapM_ (\(udp, active) -> when active (addScheduledSequence (toList qb) udp)) st.deckSwitches
     KRight -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (right st.deckSwitches)
     KLeft -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (left st.deckSwitches)
     KUp -> put $ st { deckSwitches = on st.deckSwitches }
@@ -246,11 +245,11 @@ interpretQueueBuffer qb key = do
     KChar 'S' -> put $ st { mode = QueueBuffer $ add -10 qb }
     _ -> return ()
 
-drawQueueBuffer :: Zipper Int -> Zipper (Tcp, Bool) -> App ()
+drawQueueBuffer :: Zipper Int -> Zipper (Udp, Bool) -> App ()
 drawQueueBuffer qb decks = do
   vty <- (.vty) <$> ask
   let line1 = Vty.string (defAttr `withForeColor` cyan) (show qb)
-      line2 = Vty.string (defAttr `withForeColor` magenta) (show $ first tcpHandle <$> decks)
+      line2 = Vty.string (defAttr `withForeColor` magenta) (show $ first udpSocket <$> decks)
       line3 = Vty.string (defAttr `withForeColor` yellow) "You are in Queue Buffer mode."
   liftIO $ update vty (picForImage $ foldl1 vertJoin [line1, line2, line3])
 
@@ -277,16 +276,6 @@ drawInputHash msg adler = do
       statsLine = Vty.string (defAttr `withForeColor` yellow) "You are in Adler-32 mode."
   liftIO $ update vty (picForImage $ foldl1 vertJoin [msgLine, adlerLine, statsLine])
 
-{-
--- "outer" meaning "not needing mode-specific things"
-updateOuterDisplay :: OperatingMode -> App ()
-updateOuterDisplay = \case
-  FileLoader fl -> undefined
-  InputAsHash ih -> undefined
-  TreatAsBitstring bs -> undefined
-  QueueBuffer qb -> undefined
--}
-
 changeModeErrorMessage :: String
 changeModeErrorMessage =
   unlines
@@ -304,3 +293,17 @@ add x z = replace ((+ x) . current $ z) z
 
 off :: (Bifunctor f) => Zipper (f a Bool) -> Zipper (f a Bool)
 off z = replace (second (const False) $ current z) z
+
+homeOptions :: Parser NDJTOptions
+homeOptions = NDJTOptions <$> strOption
+  (  long "home-directory"
+  <> short 'h'
+  <> help "The directory you want to wark out of."
+  )
+
+opts :: ParserInfo NDJTOptions
+opts = info homeOptions
+  (  fullDesc
+  <> progDesc "Control multiple Renoise instances over the network."
+  <> header "ndjt - nks renoise multitool"
+  )
