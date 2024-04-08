@@ -19,7 +19,7 @@ common warnings
 executable ndjt
     import:           warnings
     main-is:          Main.hs
-    other-modules: Command, Types
+    other-modules: Command, Types, Logging, Util, Parse
     -- other-extensions:
     build-depends:    
         base >=4.16
@@ -37,6 +37,10 @@ executable ndjt
       , bitvec
       , vector
       , nonempty-zipper
-      , optparse-applicative
+      , vty-unix
+      , unix
+      , attoparsec
+      , ip
+      , text
     hs-source-dirs:   app
     default-language: GHC2021

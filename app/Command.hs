@@ -41,17 +41,18 @@ playTracks i conn = do
 toMessage :: BSC8.ByteString -> Message
 toMessage luaExpression = message "/renoise/evaluate" [AsciiString luaExpression]
 
-load :: BSC8.ByteString -> Udp -> App ()
-load file conn = do
+load :: BSC8.ByteString -> Udp -> BSC8.ByteString -> App ()
+load file conn directory = do
   handle <- (.logNetworkHandle) <$> ask
   let save = "renoise.app():save_song_as(\"/dev/null/lol.xrns\")"
-      loadMsg = "renoise.app():load_song(\"" `BSC8.append` file `BSC8.append` "\")"
+      fullFilename = directory `BSC8.append` file
+      loadMsg = "renoise.app():load_song(\"" `BSC8.append` fullFilename `BSC8.append` "\")"
   logStringHandle handle <& "saving..."
   liftIO $ udp_send_packet conn (Packet_Message $ toMessage save)
   logStringHandle handle <& "save successful"
   logStringHandle handle <& "loading...l"
   liftIO $ udp_send_packet conn (Packet_Message $ toMessage loadMsg)
-  logStringHandle handle <& "load successfull"
+  logStringHandle handle <& "load successful"
 
 addScheduledSequence :: [Int] -> Udp -> App ()
 addScheduledSequence queue conn = do
