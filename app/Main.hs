@@ -25,7 +25,6 @@ import Data.ByteString.Char8 qualified as BSC8
 import Data.Digest.Adler32
 import Data.Foldable
 import Data.Function hiding (on)
-import Data.List.NonEmpty qualified as NE
 import Data.List.NonEmpty.Zipper as Z
 import Data.Time
 import Data.Text qualified as T
@@ -44,9 +43,6 @@ import System.Directory
 import System.Exit
 import System.IO
 import System.Posix.Env.ByteString
-
-rnsServerPort :: Int
-rnsServerPort = 6066
 
 main :: IO ()
 main = do
