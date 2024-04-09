@@ -1,5 +1,4 @@
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Parse where
@@ -36,10 +35,9 @@ processArgs handle bs = do
   logByteStringLn handle <& "consuming arguments"
   mapM parseWithError txs
     where parseWithError :: T.Text -> IO NDJTArg
-          parseWithError tx = case AT.parse parseNDJTArg tx of
-            Done _ r -> return r
-            Partial _ -> do logByteStringLn handle <& partialParseError; error "failed to parse, check logs"
-            Fail _ _ e -> do logByteStringLn handle <& failParseError e; error "failed to parse, check logs"
+          parseWithError tx = case AT.parseOnly (parseNDJTArg <* endOfInput) tx of
+            Right r -> return r
+            Left e -> do logByteStringLn handle <& failParseError e; error "failed to parse, check logs"
 
 partialParseError :: ByteString
 partialParseError = 

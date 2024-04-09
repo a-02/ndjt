@@ -50,7 +50,7 @@ main = do
 
   (args :: [BSC8.ByteString])  <- getArgs
   rightNow <- getCurrentTime
-  let now = formatTime defaultTimeLocale "%s" rightNow
+  let now = formatTime defaultTimeLocale "%T" rightNow
       filename = "log/ndjt_" ++ now
       logMain = filename ++ "/main"
       logNetwork = filename ++ "/network"
@@ -82,7 +82,7 @@ main = do
   drawLanding vty decks
   let info = NDJTInfo{vty, logMainHandle, logNetworkHandle, deckSockets}
       activeDecks = listToZipper $ 
-        DeckInfo <$> deckSockets <*> fix (False:) <*> homeDirectories
+        DeckInfo <$> deckSockets <*> replicate (length homeDirectories) False <*> homeDirectories
       st = NDJTState{deckSwitches = activeDecks, mode = FileLoader ""}
 
   -- run main loop, exit when done
