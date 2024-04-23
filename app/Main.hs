@@ -142,7 +142,7 @@ changeMode i = do
       2 -> do
         logByteStringLn handle <& "switching to InputAsHash"
         put $ st{mode = InputAsHash ""}
-        drawInputHash "" ""
+        drawInputHash 
       3 -> do
         logByteStringLn handle <& "switching to TreatAsBitstring"
         put $ st{mode = TreatAsBitstring zeroWord256}
@@ -154,7 +154,7 @@ changeMode i = do
       5 -> do
         drawFileLoader
       6 -> do
-        drawInputHash "" ""
+        drawInputHash 
       7 -> do
         drawBitstring zeroWord256
       8 -> do
@@ -162,7 +162,7 @@ changeMode i = do
       9 -> do
         drawFileLoader
       10 -> do
-        drawInputHash "" ""
+        drawInputHash 
       11 -> do
         drawBitstring zeroWord256
       12 -> do
