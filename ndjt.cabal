@@ -19,7 +19,7 @@ common warnings
 executable ndjt
     import:           warnings
     main-is:          Main.hs
-    other-modules: Command, Types, Logging, Util, Parse
+    other-modules: Command, Types, Logging, Util, Parse, Draw
     -- other-extensions:
     build-depends:    
         base >=4.16

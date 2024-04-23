@@ -1,20 +1,20 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NegativeLiterals #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE OverloadedLists #-}
-{-# LANGUAGE LambdaCase #-}
 
 module Main where
 
 import Command
+import Draw
 import Logging
 import Parse
 import Types
 import Util
 
+import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.RWS.Strict
 
@@ -80,20 +80,27 @@ main = do
   -- setting up initial state and read-only constants
 
   drawLanding vty decks
-  let info = NDJTInfo{vty, logMainHandle, logNetworkHandle, deckSockets}
-      activeDecks = listToZipper $ 
-        DeckInfo <$> deckSockets <*> replicate (length homeDirectories) False <*> homeDirectories
+  let info = NDJTInfo{vty, logMainHandle, logNetworkHandle}
+      activeDecks = listToZipper . getZipList $ 
+        DeckInfo 
+          <$> ZipList deckSockets 
+          <*> ZipList (replicate (length homeDirectories) False) 
+          <*> ZipList homeDirectories 
+          <*> ZipList argsRes
+          -- pissing me off.
       st = NDJTState{deckSwitches = activeDecks, mode = FileLoader ""}
 
   -- run main loop, exit when done
 
+  logByteStringLn logMainHandle <& BSC8.unlines homeDirectories
+  logByteStringLn logMainHandle <& BSC8.pack (unlines $ show <$> argsRes)
+  logTextLn logMainHandle <& showDecks activeDecks
   _ <- execRWST vtyGO info st
   shutdown vty
 
 vtyGO :: App ()
 vtyGO = do
   info <- ask
-  --  mode <- get
   k <- liftIO $ collapseEventToKey <$> nextEvent info.vty
   either (\x -> logStringHandle info.logMainHandle <& x) interpretKey k
   unless (k == Left "escape") vtyGO
@@ -112,6 +119,8 @@ interpretKey key = do
 modeBranch :: Key -> App ()
 modeBranch key = do
   st <- get
+  handle <- (.logMainHandle) <$> ask -- Woah!
+  logByteStringLn handle <& "modeBranch called"
   key & case st.mode of
     FileLoader fl -> interpretFileLoader fl
     InputAsHash ih -> interpretInputAsHash ih
@@ -121,19 +130,24 @@ modeBranch key = do
 changeMode :: Int -> App ()
 changeMode i = do 
     vty <- (.vty) <$> ask
+    handle <- (.logMainHandle) <$> ask -- Woah!
     st <- get
     let decks = deckSwitches st
     case i of
       1 -> do
+        logByteStringLn handle <& "switching to FileLoader"
         put $ st{mode = FileLoader ""}
         drawFileLoader
       2 -> do
+        logByteStringLn handle <& "switching to InputAsHash"
         put $ st{mode = InputAsHash ""}
         drawInputHash "" ""
       3 -> do
+        logByteStringLn handle <& "switching to TreatAsBitstring"
         put $ st{mode = TreatAsBitstring zeroWord256}
         drawBitstring zeroWord256
       4 -> do
+        logByteStringLn handle <& "switching to QueueBuffer"
         put $ st{mode = QueueBuffer $ listToZipper [0]}
         drawQueueBuffer (listToZipper [0]) decks
       5 -> do
@@ -153,7 +167,6 @@ changeMode i = do
       12 -> do
         drawQueueBuffer (listToZipper [0]) decks
       _ -> do
-        handle <- (.logMainHandle) <$> ask -- Woah!
         logStringHandle handle <& changeModeErrorMessage
         liftIO exitFailure
 
@@ -163,8 +176,8 @@ interpretFileLoader file key = do
   st <- get
   if key == KEnter
     then do 
-      logStringHandle handle <& "got to interpretFileLoader KEnter"
-      mapM_ (\(DeckInfo udp active directory) -> when active (load file udp directory)) st.deckSwitches
+      logByteStringLn handle <& "got to interpretFileLoader KEnter"
+      mapM_ (\(DeckInfo udp active directory _) -> when active (load file udp directory)) st.deckSwitches
     else do
       case key of
         KChar ch -> do
@@ -177,61 +190,14 @@ interpretFileLoader file key = do
         _ -> return ()
   drawFileLoader
 
-drawFileLoader :: App ()
-drawFileLoader = do
-  vty <- (.vty) <$> ask
-  st <- get
-  let line1 = Vty.string (defAttr `withForeColor` green) (fromFileLoader st.mode)
-      deckActivesShow = show st.deckSwitches
-      line2 = Vty.string (defAttr `withForeColor` red) deckActivesShow
-      line3 = Vty.string (defAttr `withForeColor` yellow) "You are in File Loader mode."
-  liftIO $ update vty (picForImage $ foldl1 vertJoin ([line1, line2, line3] :: [Image]))
-
-fromFileLoader :: OperatingMode -> String
-fromFileLoader = \case
-  FileLoader fl -> BSC8.unpack fl
-  _ -> ""
-
-drawLanding :: Vty -> [T.Text] -> IO ()
-drawLanding vty decks = do
-  update vty (picForImage $ rainbowImage landingText)
- where
-  landingText = block1 `T.append` deckText `T.append` block2
-  block1 = T.unlines
-    [ "Welcome to the NKS Renoise Multitool!"
-    , "(c) Infoglames, 2023-2024"
-    , "5000 S. Halsted St. Chicago, IL 60609"
-    , ""
-    , "You are connected to:"
-    ]
-  deckText = T.unlines decks 
-  block2 = T.unlines
-    [ ""
-    , "F1: File Loader mode. Use this to load XRNS files into NDJT."
-    , "F2: Adler-32 mode. Control track solos with Adler-32 hash."
-    , "F3: Bitstring mode. Control track solos as if it were a bitstring."
-    , "F4: Queue Buffer mode. Dedicated sequence scheduler."
-    , "ESC: Close NDJT."
-    ]
-
-rainbowImage :: T.Text -> Image
-rainbowImage tx =
-  foldl1 vertJoin $
-    (\(a, b) -> Vty.text' (defAttr `withForeColor` b) a) <$> zip (T.lines tx) themeColors
-
-themeColors :: [Color]
-themeColors =
-  let u3 f (a, b, c) = f a b c
-   in u3 linearColor <$> Prelude.reverse [(i, j, k) | (i :: Int) <- [0, 64 .. 255], j <- [255, 224 .. 0], k <- [0, 64 .. 255]]
 
 -- holy shit whens the last time i used a list comprehension?
 
 interpretTreatAsBitstring :: Word256 -> Key -> App ()
 interpretTreatAsBitstring w256 key = do
-  decks <- (.deckSockets) <$> ask
   st <- get
   drawBitstring w256
-  mapM_ (playTracks w256) decks
+  mapM_ (playTracks w256) (conn <$> st.deckSwitches)
   case key of
     KChar 'q' -> put $ st { mode = TreatAsBitstring $ complement w256 }
     KChar 'a' -> put $ st { mode = TreatAsBitstring $ rotateL w256 1 }
@@ -240,19 +206,12 @@ interpretTreatAsBitstring w256 key = do
     KChar 'D' -> put $ st { mode = TreatAsBitstring $ rotateR w256 10 }
     _ -> return ()
 
-drawBitstring :: Word256 -> App ()
-drawBitstring w256 = do
-  let line1 = Vty.string (defAttr `withForeColor` blue) (show w256)
-      line2 = Vty.string (defAttr `withForeColor` yellow) "You are in Bitstring mode."
-  vty <- (.vty) <$> ask
-  liftIO $ update vty (picForImage $ foldl1 vertJoin ([line1, line2] :: [Image]))
-
 interpretQueueBuffer :: Zipper Int -> Key -> App ()
 interpretQueueBuffer qb key = do
   vty <- (.vty) <$> ask
   st <- get
   case key of
-    KEnter -> mapM_ (\(DeckInfo udp active _) -> when active (addScheduledSequence (toList qb) udp)) st.deckSwitches
+    KEnter -> mapM_ (\(DeckInfo udp active _ _) -> when active (addScheduledSequence (toList qb) udp)) st.deckSwitches
     KRight -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (right st.deckSwitches)
     KLeft -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (left st.deckSwitches)
     KUp -> put $ st { deckSwitches = on st.deckSwitches }
@@ -265,14 +224,6 @@ interpretQueueBuffer qb key = do
     KChar 'S' -> put $ st { mode = QueueBuffer $ add -10 qb }
     _ -> return ()
 
-drawQueueBuffer :: Zipper Int -> Decks -> App ()
-drawQueueBuffer qb decks = do
-  vty <- (.vty) <$> ask
-  let line1 = Vty.string (defAttr `withForeColor` cyan) (show qb)
-      line2 = Vty.string (defAttr `withForeColor` magenta) (show $ (\DeckInfo{..} -> udpSocket conn) <$> decks)
-      line3 = Vty.string (defAttr `withForeColor` yellow) "You are in Queue Buffer mode."
-  liftIO $ update vty (picForImage $ foldl1 vertJoin ([line1, line2, line3] :: [Image]))
-
 interpretInputAsHash :: BSC8.ByteString -> Key -> App ()
 interpretInputAsHash ih key = do
   let (+++) = BSC8.append
@@ -284,17 +235,9 @@ interpretInputAsHash ih key = do
   case key of
     (KChar ch) -> do
       put $ st { mode = InputAsHash (msg $ BSC8.singleton ch) }
-      decks <- (.deckSockets) <$> ask
-      mapM_ (playTracks . adler $ BSC8.singleton ch) decks
+      st' <- get -- this is lazy. you need to wake up, man.
+      mapM_ (playTracks . adler $ BSC8.singleton ch) (conn <$> st'.deckSwitches)
     _ -> return ()
-
-drawInputHash :: BSC8.ByteString -> BSC8.ByteString -> App ()
-drawInputHash msg adler = do
-  vty <- (.vty) <$> ask
-  let msgLine = Vty.string (defAttr `withForeColor` cyan) (BSC8.unpack msg)
-      adlerLine = Vty.string (defAttr `withForeColor` magenta) (BSC8.unpack adler)
-      statsLine = Vty.string (defAttr `withForeColor` yellow) "You are in Adler-32 mode."
-  liftIO $ update vty (picForImage $ foldl1 vertJoin ([msgLine, adlerLine, statsLine] :: [Image]))
 
 changeModeErrorMessage :: String
 changeModeErrorMessage =

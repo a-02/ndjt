@@ -27,6 +27,7 @@ parseNDJTArg = do
   (argPort :: Word16) <- decimal
   skip (== ':')
   (argHome :: BSC8.ByteString) <- TE.encodeUtf8 <$> takeText
+  (argText :: T.Text) <- return ""
   return NDJTArg{..}
 
 processArgs :: Handle -> [BSC8.ByteString] -> IO [NDJTArg]
@@ -36,7 +37,7 @@ processArgs handle bs = do
   mapM parseWithError txs
     where parseWithError :: T.Text -> IO NDJTArg
           parseWithError tx = case AT.parseOnly (parseNDJTArg <* endOfInput) tx of
-            Right r -> return r
+            Right r -> return (r {argText = tx})
             Left e -> do logByteStringLn handle <& failParseError e; error "failed to parse, check logs"
 
 partialParseError :: ByteString
