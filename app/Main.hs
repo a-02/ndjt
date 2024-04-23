@@ -74,12 +74,13 @@ main = do
   let ports = fromIntegral . argPort <$> argsRes
       decks = IP.encode . argIP <$> argsRes
       homeDirectories = argHome <$> argsRes
+      argsTextRep = argText <$> argsRes
   deckSockets <- zipWithM openUdp (T.unpack <$> decks) ports
   logByteStringLn logNetworkHandle <& "created deck sockets"
 
   -- setting up initial state and read-only constants
 
-  drawLanding vty decks
+  drawLanding vty argsTextRep
   let info = NDJTInfo{vty, logMainHandle, logNetworkHandle}
       activeDecks = listToZipper . getZipList $ 
         DeckInfo 

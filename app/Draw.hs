@@ -22,17 +22,19 @@ drawFileLoader = do
   vty <- (.vty) <$> ask
   st <- get
   let textBlock = T.unlines
-        [ T.pack $ fromFileLoader st.mode
+        [ "You are in File Loader mode."
+        , T.pack $ fromFileLoader st.mode
         , showDecks st.deckSwitches
-        , "You are in File Loader mode."
         ]
   liftIO $ update vty (picForImage $ colorImage primaryColors textBlock)
 
 drawBitstring :: Word256 -> App ()
 drawBitstring w256 = do
+  st <- get
   let textBlock = T.unlines
-        [ T.pack $ show w256
-        , "You are in Bitstring mode."
+        [ "You are in Bitstring mode."
+        , T.pack ("---> " ++  show (showHexWord256 w256))
+        , showDecks st.deckSwitches
         ]
   vty <- (.vty) <$> ask
   liftIO $ update vty (picForImage $ colorImage (hungryRotate 1 primaryColors) textBlock)
@@ -40,20 +42,24 @@ drawBitstring w256 = do
 drawQueueBuffer :: Zipper Int -> Decks -> App ()
 drawQueueBuffer qb decks = do
   vty <- (.vty) <$> ask
+  st <- get
   let textBlock = T.unlines
-        [ T.pack $ show qb
+        [ "You are in Queue Buffer mode."
+        , T.pack ("---> " ++ show qb)
         , T.pack . show $ (\DeckInfo{..} -> udpSocket conn) <$> decks
-        , T.pack "You are in Queue Buffer mode."
+        , showDecks st.deckSwitches
         ]
   liftIO $ update vty (picForImage $ colorImage (hungryRotate 2 primaryColors) textBlock)
 
 drawInputHash :: BSC8.ByteString -> BSC8.ByteString -> App ()
 drawInputHash msg adler = do
   vty <- (.vty) <$> ask
+  st <- get
   let textBlock = T.unlines
-        [ TE.decodeUtf8 msg
+        [ "You are in Adler-32 mode."
+        , TE.decodeUtf8 msg
         , TE.decodeUtf8 adler
-        , "You are in Adler-32 mode."
+        , showDecks st.deckSwitches
         ]
   liftIO $ update vty (picForImage $ colorImage (hungryRotate 3 primaryColors) textBlock)
 
@@ -91,8 +97,8 @@ themeColors =
    in u3 linearColor <$> Prelude.reverse [(i, j, k) | (i :: Int) <- [0, 64 .. 255], j <- [255, 224 .. 0], k <- [0, 64 .. 255]]
 
 primaryColors :: [Color]
-primaryColors = [red, yellow, green, blue]
+primaryColors = cycle [red, yellow, green, blue]
 
 otherColors :: [Color]
-otherColors = [cyan, magenta, white]
+otherColors = cycle [cyan, magenta, white]
 
