@@ -8,6 +8,7 @@ import Control.Monad.IO.Class
 import Control.Monad.Trans.RWS.Strict
 import Graphics.Vty as Vty
 import Data.ByteString.Char8 qualified as BSC8
+import Data.Digest.Adler32 -- this is temporary, carry the digest with the opmode, loser
 import Data.Text qualified as T
 import Data.Text.Encoding as TE
 import Data.WideWord.Word256
@@ -23,7 +24,7 @@ drawFileLoader = do
   st <- get
   let textBlock = T.unlines
         [ "You are in File Loader mode."
-        , T.pack $ fromFileLoader st.mode
+        , T.pack $ showOperatingMode st.mode
         , showDecks st.deckSwitches
         ]
   liftIO $ update vty (picForImage $ colorImage primaryColors textBlock)
@@ -51,14 +52,15 @@ drawQueueBuffer qb decks = do
         ]
   liftIO $ update vty (picForImage $ colorImage (hungryRotate 2 primaryColors) textBlock)
 
-drawInputHash :: BSC8.ByteString -> BSC8.ByteString -> App ()
-drawInputHash msg adler = do
+drawInputHash :: App ()
+drawInputHash = do
   vty <- (.vty) <$> ask
   st <- get
   let textBlock = T.unlines
         [ "You are in Adler-32 mode."
-        , TE.decodeUtf8 msg
-        , TE.decodeUtf8 adler
+        , "MESSAGE --> " `T.append` T.pack (showOperatingMode st.mode)
+        -- ugh
+        , "ADLER32 --> " `T.append` (T.pack . show . adler32 . BSC8.pack $ showOperatingMode st.mode)
         , showDecks st.deckSwitches
         ]
   liftIO $ update vty (picForImage $ colorImage (hungryRotate 3 primaryColors) textBlock)
@@ -69,9 +71,8 @@ drawLanding vty decks = do
  where
   landingText = block1 `T.append` deckText `T.append` block2
   block1 = T.unlines
-    [ "Welcome to the NKS Renoise Multitool!"
-    , "(c) Infoglames, 2023-2024"
-    , "5000 S. Halsted St. Chicago, IL 60609"
+    [ "NKS Renoise Multitool"
+    , "    v. 0.0.0.0"
     , ""
     , "You are connected to:"
     ]

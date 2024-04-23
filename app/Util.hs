@@ -40,11 +40,12 @@ third f (a, b, c) = (a, b, f c)
 zipNE3 :: NE.NonEmpty a -> NE.NonEmpty b -> NE.NonEmpty c -> NE.NonEmpty (a,b,c)
 zipNE3 ~(x NE.:| xs) ~(y NE.:| ys) ~(z NE.:| zs) = (x, y, z) NE.:| zip3 xs ys zs
 
--- this is bad!
-fromFileLoader :: OperatingMode -> String
-fromFileLoader = \case
+showOperatingMode :: OperatingMode -> String
+showOperatingMode = \case
   FileLoader fl -> BSC8.unpack fl
+  InputAsHash ih -> BSC8.unpack ih
   _ -> ""
+
 
 -- legit worst function ive ever written
 -- so inefficient it hurts

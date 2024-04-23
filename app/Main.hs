@@ -228,17 +228,15 @@ interpretQueueBuffer qb key = do
 interpretInputAsHash :: BSC8.ByteString -> Key -> App ()
 interpretInputAsHash ih key = do
   let (+++) = BSC8.append
-      msg c = "MESSAGE --> " +++ ih +++ c
       adler c = adler32 $ ih +++ c
-      adlerDigest = "ADLER-32 HASH --> " +++ (BSC8.pack . show $ adler "")
-  drawInputHash (msg "") adlerDigest
   st <- get
   case key of
     (KChar ch) -> do
-      put $ st { mode = InputAsHash (msg $ BSC8.singleton ch) }
+      put $ st { mode = InputAsHash (ih +++ BSC8.singleton ch) }
       st' <- get -- this is lazy. you need to wake up, man.
       mapM_ (playTracks . adler $ BSC8.singleton ch) (conn <$> st'.deckSwitches)
     _ -> return ()
+  drawInputHash
 
 changeModeErrorMessage :: String
 changeModeErrorMessage =
