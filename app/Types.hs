@@ -36,12 +36,16 @@ showDecks decks =
   let di = current decks
       l  = lefts decks
       r  = rights decks
-      f  = (.arg.argText)
+      g x = x.arg.argText `T.append` deckBool x.active
    in T.concat
-        [ T.unlines $ f <$> l
-        , f di `T.append` " <---\n"
-        , T.unlines $ f <$> r
+        [ T.unlines $ g <$> l
+        , g di `T.append` " <---\n"
+        , T.unlines $ g <$> r
         ]
+
+deckBool :: Bool -> T.Text
+deckBool True = " On "
+deckBool False = " Off "
 
 data DeckInfo = DeckInfo
   { conn :: Udp
@@ -67,5 +71,3 @@ data NDJTInfo = NDJTInfo
   , logMainHandle :: Handle
   , logNetworkHandle :: Handle
   }
-
--- todo: unfuck my nix setup

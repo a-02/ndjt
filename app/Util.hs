@@ -5,6 +5,7 @@ module Util where
 import Data.ByteString.Char8 qualified as BSC8
 import Data.List.NonEmpty.Zipper as Z
 import Data.List.NonEmpty qualified as NE
+import Data.WideWord.Word256
 
 import Types
 
@@ -44,8 +45,15 @@ showOperatingMode :: OperatingMode -> String
 showOperatingMode = \case
   FileLoader fl -> BSC8.unpack fl
   InputAsHash ih -> BSC8.unpack ih
-  _ -> ""
+  QueueBuffer qb -> showZipper qb
+  TreatAsBitstring w256 -> showHexWord256 w256
 
+showZipper :: Show a => Zipper a -> String
+showZipper z = 
+  let l = lefts z
+      c = current z
+      r = rights z
+   in show l ++ show c ++ show r
 
 -- legit worst function ive ever written
 -- so inefficient it hurts

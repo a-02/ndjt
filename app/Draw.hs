@@ -10,7 +10,6 @@ import Graphics.Vty as Vty
 import Data.ByteString.Char8 qualified as BSC8
 import Data.Digest.Adler32 -- this is temporary, carry the digest with the opmode, loser
 import Data.Text qualified as T
-import Data.Text.Encoding as TE
 import Data.WideWord.Word256
 import Data.List.NonEmpty.Zipper as Z
 import Sound.Osc
@@ -29,24 +28,25 @@ drawFileLoader = do
         ]
   liftIO $ update vty (picForImage $ colorImage primaryColors textBlock)
 
-drawBitstring :: Word256 -> App ()
-drawBitstring w256 = do
+drawBitstring :: App ()
+drawBitstring = do
   st <- get
   let textBlock = T.unlines
         [ "You are in Bitstring mode."
-        , T.pack ("---> " ++  show (showHexWord256 w256))
+        , T.pack ("---> " ++  showOperatingMode st.mode)
         , showDecks st.deckSwitches
         ]
   vty <- (.vty) <$> ask
   liftIO $ update vty (picForImage $ colorImage (hungryRotate 1 primaryColors) textBlock)
 
-drawQueueBuffer :: Zipper Int -> Decks -> App ()
-drawQueueBuffer qb decks = do
+drawQueueBuffer :: App ()
+drawQueueBuffer = do
   vty <- (.vty) <$> ask
   st <- get
-  let textBlock = T.unlines
+  let decks = st.deckSwitches
+      textBlock = T.unlines
         [ "You are in Queue Buffer mode."
-        , T.pack ("---> " ++ show qb)
+        , T.pack ("---> " ++ showOperatingMode st.mode)
         , T.pack . show $ (\DeckInfo{..} -> udpSocket conn) <$> decks
         , showDecks st.deckSwitches
         ]

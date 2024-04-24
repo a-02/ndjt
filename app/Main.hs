@@ -146,27 +146,27 @@ changeMode i = do
       3 -> do
         logByteStringLn handle <& "switching to TreatAsBitstring"
         put $ st{mode = TreatAsBitstring zeroWord256}
-        drawBitstring zeroWord256
+        drawBitstring
       4 -> do
         logByteStringLn handle <& "switching to QueueBuffer"
         put $ st{mode = QueueBuffer $ listToZipper [0]}
-        drawQueueBuffer (listToZipper [0]) decks
+        drawQueueBuffer
       5 -> do
         drawFileLoader
       6 -> do
         drawInputHash 
       7 -> do
-        drawBitstring zeroWord256
+        drawBitstring
       8 -> do
-        drawQueueBuffer (listToZipper [0]) decks
+        drawQueueBuffer
       9 -> do
         drawFileLoader
       10 -> do
         drawInputHash 
       11 -> do
-        drawBitstring zeroWord256
+        drawBitstring
       12 -> do
-        drawQueueBuffer (listToZipper [0]) decks
+        drawQueueBuffer
       _ -> do
         logStringHandle handle <& changeModeErrorMessage
         liftIO exitFailure
@@ -184,20 +184,24 @@ interpretFileLoader file key = do
         KChar ch -> do
           put $ st { mode = FileLoader $ file `BSC8.snoc` ch}
         KBS -> maybe (return ()) ((\x -> put $ st { mode = FileLoader x }) . fst) (BSC8.unsnoc file) -- ugh
-        KRight -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (right st.deckSwitches)
-        KLeft -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (left st.deckSwitches)
-        KUp -> put $ st { deckSwitches = on st.deckSwitches }
-        KDown -> put $ st { deckSwitches = off st.deckSwitches }
-        _ -> return ()
+        _ -> interpretArrows key
   drawFileLoader
 
+interpretArrows :: Key -> App ()
+interpretArrows key = do 
+  st <- get 
+  case key of
+    KRight -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (right st.deckSwitches)
+    KLeft -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (left st.deckSwitches)
+    KUp -> put $ st { deckSwitches = on st.deckSwitches }
+    KDown -> put $ st { deckSwitches = off st.deckSwitches }
+    _ -> return ()
 
 -- holy shit whens the last time i used a list comprehension?
 
 interpretTreatAsBitstring :: Word256 -> Key -> App ()
 interpretTreatAsBitstring w256 key = do
   st <- get
-  drawBitstring w256
   mapM_ (playTracks w256) (conn <$> st.deckSwitches)
   case key of
     KChar 'q' -> put $ st { mode = TreatAsBitstring $ complement w256 }
@@ -205,7 +209,8 @@ interpretTreatAsBitstring w256 key = do
     KChar 'd' -> put $ st { mode = TreatAsBitstring $ rotateR w256 1 }
     KChar 'A' -> put $ st { mode = TreatAsBitstring $ rotateL w256 10 }
     KChar 'D' -> put $ st { mode = TreatAsBitstring $ rotateR w256 10 }
-    _ -> return ()
+    _ -> interpretArrows key
+  drawBitstring
 
 interpretQueueBuffer :: Zipper Int -> Key -> App ()
 interpretQueueBuffer qb key = do
@@ -213,17 +218,14 @@ interpretQueueBuffer qb key = do
   st <- get
   case key of
     KEnter -> mapM_ (\(DeckInfo udp active _ _) -> when active (addScheduledSequence (toList qb) udp)) st.deckSwitches
-    KRight -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (right st.deckSwitches)
-    KLeft -> maybe (return ()) (\x -> put $ st { deckSwitches = x }) (left st.deckSwitches)
-    KUp -> put $ st { deckSwitches = on st.deckSwitches }
-    KDown -> put $ st { deckSwitches = off st.deckSwitches }
     KChar 'w' -> put $ st { mode = QueueBuffer $ add 1 qb }
     KChar 's' -> put $ st { mode = QueueBuffer $ add -1 qb }
     KChar 'a' -> maybe (return ()) (\x -> put $ st { mode = QueueBuffer x }) (left qb)
     KChar 'd' -> maybe (return ()) (\x -> put $ st { mode = QueueBuffer x }) (right qb)
     KChar 'W' -> put $ st { mode = QueueBuffer $ add 10 qb }
     KChar 'S' -> put $ st { mode = QueueBuffer $ add -10 qb }
-    _ -> return ()
+    _ -> interpretArrows key
+  drawQueueBuffer
 
 interpretInputAsHash :: BSC8.ByteString -> Key -> App ()
 interpretInputAsHash ih key = do
@@ -235,7 +237,7 @@ interpretInputAsHash ih key = do
       put $ st { mode = InputAsHash (ih +++ BSC8.singleton ch) }
       st' <- get -- this is lazy. you need to wake up, man.
       mapM_ (playTracks . adler $ BSC8.singleton ch) (conn <$> st'.deckSwitches)
-    _ -> return ()
+    _ -> interpretArrows key
   drawInputHash
 
 changeModeErrorMessage :: String
