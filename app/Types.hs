@@ -71,3 +71,9 @@ data NDJTInfo = NDJTInfo
   , logMainHandle :: Handle
   , logNetworkHandle :: Handle
   }
+
+data XRNS = XRNS
+  { bpm :: Int
+  , octave :: Int
+  , loopCoeff :: Int
+  }
