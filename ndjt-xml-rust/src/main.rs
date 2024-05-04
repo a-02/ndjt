@@ -105,16 +105,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let xmlfile = zip.by_index(0)?;
-    println!("file is {}, size {} bytes", xmlfile.name(), xmlfile.size());
     let xmlfile = BufReader::new(DecodeReaderBytes::new(xmlfile));
     let mut reado = Reader::from_reader(xmlfile);
 
     let mut prodparser = XRNSParser::new();
     let mut buf = Vec::with_capacity(BUF_SIZE);
-    loop {
-        if prodparser.is_finished() {
-            break;
-        }
+
+    while !prodparser.is_finished() {
         match reado.read_event_into(&mut buf)? {
             Event::Eof => break,
             ev => {
@@ -123,6 +120,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         buf.clear();
     }
+
     let xrns = prodparser.result();
     write_xrns(&mut io::stdout(), &xrns)?;
 

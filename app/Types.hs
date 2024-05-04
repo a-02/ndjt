@@ -73,7 +73,7 @@ data NDJTInfo = NDJTInfo
   }
 
 data XRNS = XRNS
-  { bpm :: Int
-  , octave :: Int
+  { name :: T.Text
+  , bpm :: Float
   , loopCoeff :: Int
   }
