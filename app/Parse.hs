@@ -20,23 +20,25 @@ import System.IO
 import Logging
 import Types
 
-parseNDJTArg :: Parser NDJTArg
-parseNDJTArg = do
+parseXRDJArg :: Parser XRDJArg
+parseXRDJArg = do
+  (argUser :: T.Text) <- takeTill (== '@')
+  skip (== '@')
   (argIP :: IP) <- (fromIPv4 <$> V4.parser) <|> (fromIPv6 <$> V6.parser)
   skip (== ':')
   (argPort :: Word16) <- decimal
   skip (== ':')
-  (argHome :: BSC8.ByteString) <- TE.encodeUtf8 <$> takeText
+  (argHome :: T.Text) <- takeText
   (argText :: T.Text) <- return ""
-  return NDJTArg{..}
+  return XRDJArg{..}
 
-processArgs :: Handle -> [BSC8.ByteString] -> IO [NDJTArg]
+processArgs :: Handle -> [BSC8.ByteString] -> IO [XRDJArg]
 processArgs handle bs = do
   let txs = TE.decodeUtf8 <$> bs
   logByteStringLn handle <& "consuming arguments"
   mapM parseWithError txs
-    where parseWithError :: T.Text -> IO NDJTArg
-          parseWithError tx = case AT.parseOnly (parseNDJTArg <* endOfInput) tx of
+    where parseWithError :: T.Text -> IO XRDJArg
+          parseWithError tx = case AT.parseOnly (parseXRDJArg <* endOfInput) tx of
             Right r -> return (r {argText = tx})
             Left e -> do logByteStringLn handle <& failParseError e; error "failed to parse, check logs"
 
@@ -47,3 +49,5 @@ partialParseError =
 failParseError :: String -> ByteString
 failParseError e =
   "command line parsing failed, returned Fail: " `BSC8.append` BSC8.pack e
+
+

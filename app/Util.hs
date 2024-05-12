@@ -64,3 +64,6 @@ hungryRotate i list =
   let f (x:xs) = xs ++ pure x
       f [] = []
    in iterate f list !! i
+
+uncurry3 :: (a -> b -> c -> d) -> (a,b,c) -> d
+uncurry3 f (a,b,c) = f a b c

@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Types where
 
@@ -19,9 +20,7 @@ import Sound.Osc
 
 import System.IO
 
-type App = RWST NDJTInfo () NDJTState IO
-
-type HomeDirectory = BSC8.ByteString
+type App = RWST XRDJInfo () XRDJState IO
 
 data OperatingMode
   = FileLoader BSC8.ByteString
@@ -50,23 +49,24 @@ deckBool False = " Off "
 data DeckInfo = DeckInfo
   { conn :: Udp
   , active :: Bool
-  , home :: HomeDirectory
-  , arg :: NDJTArg
+  , home :: T.Text
+  , arg :: XRDJArg
   }
 
-data NDJTArg = NDJTArg
-  { argIP :: IP
-  , argHome :: HomeDirectory
+data XRDJArg = XRDJArg
+  { argUser :: T.Text
+  , argIP :: IP
+  , argHome :: T.Text
   , argPort :: Word16
   , argText :: T.Text
   } deriving (Show)
 
-data NDJTState = NDJTState
+data XRDJState = XRDJState
   { deckSwitches :: Decks
   , mode :: OperatingMode
   }
 
-data NDJTInfo = NDJTInfo
+data XRDJInfo = XRDJInfo
   { vty :: Vty
   , logMainHandle :: Handle
   , logNetworkHandle :: Handle

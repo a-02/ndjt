@@ -1,5 +1,5 @@
 cabal-version:      3.4
-name:               ndjt
+name:               xrdj
 version:            0.1.0.0
 -- synopsis:
 -- description:
@@ -19,7 +19,7 @@ common warnings
 executable ndjt
     import:           warnings
     main-is:          Main.hs
-    other-modules: Command, Types, Logging, Util, Parse, Draw, XML
+    other-modules: Command, Types, Logging, Util, Parse, Draw, Network
     -- other-extensions:
     build-depends:    
         base >=4.16
@@ -42,6 +42,7 @@ executable ndjt
       , attoparsec
       , ip
       , text
-      , process
+      , libssh2 == 0.2.0.9
+      , async
     hs-source-dirs:   app
     default-language: GHC2021

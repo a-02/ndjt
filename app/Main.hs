@@ -28,6 +28,7 @@ import Data.Function hiding (on)
 import Data.List.NonEmpty.Zipper as Z
 import Data.Time
 import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.WideWord.Word256
 
 import GHC.Bits
@@ -43,6 +44,7 @@ import System.Directory
 import System.Exit
 import System.IO
 import System.Posix.Env.ByteString
+import Network (xrdjPSSHClient)
 
 main :: IO ()
 main = do
@@ -51,7 +53,7 @@ main = do
   (args :: [BSC8.ByteString])  <- getArgs
   rightNow <- getCurrentTime
   let now = formatTime defaultTimeLocale "%T" rightNow
-      filename = "log/ndjt_" ++ now
+      filename = "log/xrdj_" ++ now
       logMain = filename ++ "/main"
       logNetwork = filename ++ "/network"
 
@@ -71,17 +73,22 @@ main = do
 
   argsRes <- processArgs logNetworkHandle args
 
-  let ports = fromIntegral . argPort <$> argsRes
-      decks = IP.encode . argIP <$> argsRes
+  let users = argUser <$> argsRes
+      ports = fromIntegral . argPort <$> argsRes
+      ips = argIP <$> argsRes
+      decks = IP.encode <$> ips
       homeDirectories = argHome <$> argsRes
       argsTextRep = argText <$> argsRes
+
+  xrdjPSSHClient users ips homeDirectories
+
   deckSockets <- zipWithM openUdp (T.unpack <$> decks) ports
   logByteStringLn logNetworkHandle <& "created deck sockets"
 
   -- setting up initial state and read-only constants
 
   drawLanding vty argsTextRep
-  let info = NDJTInfo{vty, logMainHandle, logNetworkHandle}
+  let info = XRDJInfo{vty, logMainHandle, logNetworkHandle}
       activeDecks = listToZipper . getZipList $ 
         DeckInfo 
           <$> ZipList deckSockets 
@@ -89,11 +96,11 @@ main = do
           <*> ZipList homeDirectories 
           <*> ZipList argsRes
           -- pissing me off.
-      st = NDJTState{deckSwitches = activeDecks, mode = FileLoader ""}
+      st = XRDJState{deckSwitches = activeDecks, mode = FileLoader ""}
 
   -- run main loop, exit when done
 
-  logByteStringLn logMainHandle <& BSC8.unlines homeDirectories
+  logTextLn logMainHandle <& T.unlines homeDirectories
   logByteStringLn logMainHandle <& BSC8.pack (unlines $ show <$> argsRes)
   logTextLn logMainHandle <& showDecks activeDecks
   _ <- execRWST vtyGO info st
@@ -178,7 +185,7 @@ interpretFileLoader file key = do
   if key == KEnter
     then do 
       logByteStringLn handle <& "got to interpretFileLoader KEnter"
-      mapM_ (\(DeckInfo udp active directory _) -> when active (load file udp directory)) st.deckSwitches
+      mapM_ (\(DeckInfo udp active directory _) -> when active (load (TE.decodeUtf8 file) udp directory)) st.deckSwitches
     else do
       case key of
         KChar ch -> do

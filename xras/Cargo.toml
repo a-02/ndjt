@@ -1,0 +1,28 @@
+[package]
+name = "xras"
+description = "XRNS Remote Access Service"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+zip = "1.1.1"
+quick-xml = "0.31.0"
+encoding_rs_io = "0.1.7"
+ssh2 = "0.9.4"
+massh = "0.6.3"
+toml = "0.4.2"
+glob = "0.3.1"
+serde = { version = "1.0.201", features = ["std", "derive", "serde_derive"] }
+
+[profile.release]
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = 'abort'
+strip = true
+
+[[bin]]
+name = "digest"
+path = "src/digest/main.rs"

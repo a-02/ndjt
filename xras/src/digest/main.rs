@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     env,
     error::Error,
     fs::File,
@@ -11,6 +12,11 @@ use encoding_rs_io::DecodeReaderBytes;
 
 use quick_xml::{events::Event, Reader};
 
+use glob::glob;
+
+use serde::Serialize;
+use toml::ser;
+
 const BUF_SIZE: usize = 4096; // 4kb at once
 
 #[derive(Copy, Clone, Debug)]
@@ -20,6 +26,7 @@ enum ParserState {
     ReadLoopCoeff,
 }
 
+#[derive(Serialize)]
 struct XRNSData {
     pub beats_per_min: f32,
     pub loop_coeff: u8,
@@ -37,15 +44,6 @@ impl XRNSData {
 struct XRNSParser {
     state: ParserState,
     res: XRNSData,
-}
-
-fn write_xrns(w: &mut impl Write, xrns: &XRNSData) -> io::Result<()> {
-    write!(
-        w,
-        "{}\n{}\n",
-        xrns.beats_per_min.to_string(),
-        xrns.loop_coeff.to_string()
-    )
 }
 
 impl XRNSParser {
@@ -96,33 +94,35 @@ impl XRNSParser {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let path = env::args().nth(1).ok_or("no filename provided!")?;
-    let zipfile = File::open(path)?;
-    let mut zip = ZipArchive::new(zipfile)?;
-
-    if zip.len() != 1 {
-        Err("expected only 1 file")?;
-    }
-
-    let xmlfile = zip.by_index(0)?;
-    let xmlfile = BufReader::new(DecodeReaderBytes::new(xmlfile));
-    let mut reado = Reader::from_reader(xmlfile);
-
-    let mut prodparser = XRNSParser::new();
-    let mut buf = Vec::with_capacity(BUF_SIZE);
-
-    while !prodparser.is_finished() {
-        match reado.read_event_into(&mut buf)? {
-            Event::Eof => break,
-            ev => {
-                prodparser.process(ev)?;
+    let mut results = HashMap::new();
+    for entry in glob("*.xrns")? {
+        match entry {
+            Ok(path) => {
+                let path_scoped = path;
+                let zipfile = File::open(&path_scoped)?;
+                let mut zip = ZipArchive::new(zipfile)?;
+                let xmlfile = zip.by_index(0)?;
+                let xmlfile = BufReader::new(DecodeReaderBytes::new(xmlfile));
+                let mut reado = Reader::from_reader(xmlfile);
+                let mut prodparser = XRNSParser::new();
+                let mut buf = Vec::with_capacity(BUF_SIZE);
+                while !prodparser.is_finished() {
+                    match reado.read_event_into(&mut buf)? {
+                        Event::Eof => break,
+                        ev => {
+                            prodparser.process(ev)?;
+                        }
+                    }
+                    buf.clear();
+                }
+                let xrns = prodparser.result();
+                results.insert(path_scoped, xrns);
             }
+            Err(e) => println!("{:?}", e),
         }
-        buf.clear();
     }
-
-    let xrns = prodparser.result();
-    write_xrns(&mut io::stdout(), &xrns)?;
-
+    let mut file = File::create("out.toml")?;
+    let toml = toml::to_string(&results).unwrap();
+    file.write_all(&toml.as_bytes())?;
     Ok(())
 }

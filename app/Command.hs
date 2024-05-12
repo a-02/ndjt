@@ -10,7 +10,8 @@ import Colog.Core.Action
 import Colog.Core.IO
 
 import Data.Bit
-import Data.ByteString.Char8 as BSC8
+import Data.Text qualified as T
+import Data.Text.Encoding qualified as TE
 import Data.Vector qualified as V
 import Data.Vector.Unboxed qualified as VU
 
@@ -33,20 +34,20 @@ playTracks :: (Integral a) => a -> Udp -> App ()
 playTracks i conn = do
   handle <- (.logNetworkHandle) <$> ask
   let bits = VU.convert $ unBit `VU.map` castFromWords [fromIntegral i]
-      mute a = BSC8.pack $ "renoise.song().tracks[" ++ show a ++ "]:mute()"
-      unmute a = BSC8.pack $ "renoise.song().tracks[" ++ show a ++ "]:unmute()"
+      mute a = T.pack $ "renoise.song().tracks[" ++ show a ++ "]:mute()"
+      unmute a = T.pack $ "renoise.song().tracks[" ++ show a ++ "]:unmute()"
       actions = V.imap (\idx b -> if b then toMessage (unmute idx) else toMessage (mute idx)) bits
   liftIO . udp_send_packet conn . p_bundle immediately $ V.toList actions
 
-toMessage :: BSC8.ByteString -> Message
-toMessage luaExpression = message "/renoise/evaluate" [AsciiString luaExpression]
+toMessage :: T.Text -> Message
+toMessage luaExpression = message "/renoise/evaluate" [AsciiString $ TE.encodeUtf8 luaExpression]
 
-load :: BSC8.ByteString -> Udp -> BSC8.ByteString -> App ()
+load :: T.Text -> Udp -> T.Text -> App ()
 load file conn directory = do
   handle <- (.logNetworkHandle) <$> ask
   let save = "renoise.app():save_song_as(\"/dev/null/lol.xrns\")"
-      fullFilename = directory `BSC8.append` file
-      loadMsg = "renoise.app():load_song(\"" `BSC8.append` fullFilename `BSC8.append` "\")"
+      fullFilename = directory `T.append` file
+      loadMsg = "renoise.app():load_song(\"" `T.append` fullFilename `T.append` "\")"
   logStringHandle handle <& "saving..."
   liftIO $ udp_send_packet conn (Packet_Message $ toMessage save)
   logStringHandle handle <& "save successful"
@@ -57,7 +58,7 @@ load file conn directory = do
 addScheduledSequence :: [Int] -> Udp -> App ()
 addScheduledSequence queue conn = do
   handle <- (.logNetworkHandle) <$> ask
-  let msg i = "renoise.song().transport.add_scheduled_sequence(" ++ show i ++ ")"
+  let msg i = T.pack $ "renoise.song().transport.add_scheduled_sequence(" ++ show i ++ ")"
   mapM_ (\a -> liftIO $ 
-    udp_send_packet conn (Packet_Message $ toMessage (BSC8.pack $ msg a))) 
+    udp_send_packet conn (Packet_Message . toMessage $ msg a)) 
     queue

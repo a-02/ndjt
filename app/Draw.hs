@@ -71,8 +71,8 @@ drawLanding vty decks = do
  where
   landingText = block1 `T.append` deckText `T.append` block2
   block1 = T.unlines
-    [ "NKS Renoise Multitool"
-    , "    v. 0.0.0.0"
+    [ "xrdj: xrns remote disc jockey"
+    , "v.0.0.0.0"
     , ""
     , "You are connected to:"
     ]
