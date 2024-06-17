@@ -44,5 +44,6 @@ executable ndjt
       , text
       , libssh2 == 0.2.0.9
       , async
+      , process
     hs-source-dirs:   app
     default-language: GHC2021

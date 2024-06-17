@@ -1,6 +1,6 @@
 [package]
-name = "xras"
-description = "XRNS Remote Access Service"
+name = "rpfps"
+description = "Renoise Project File Parser Script"
 version = "0.1.0"
 edition = "2021"
 
@@ -23,6 +23,3 @@ codegen-units = 1
 panic = 'abort'
 strip = true
 
-[[bin]]
-name = "digest"
-path = "src/digest/main.rs"
