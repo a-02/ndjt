@@ -25,7 +25,7 @@ sshSessionXRDJ user ip home  =
 
 sessionAction :: T.Text -> IP -> Session -> IO ()
 sessionAction home ip sesh = do
-  let saveFilePath = "temp/digest_" ++ (T.unpack . IP.encode $ ip)
+  let saveFilePath = "/tmp/xrdj/rpfps_" ++ (T.unpack . IP.encode $ ip)
       home' = (T.unpack home ++)
   _ <- scpSendFile sesh 0o777 "rpfps/target/release/rpfps" (T.unpack home)
   _ <- runShellCommands sesh ["." ++ home' "/digest"]

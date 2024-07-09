@@ -1,11 +1,7 @@
-{-# LANGUAGE LambdaCase #-}
-
 module Util where
 
-import Data.ByteString.Char8 qualified as BSC8
 import Data.List.NonEmpty.Zipper as Z
 import Data.List.NonEmpty qualified as NE
-import Data.WideWord.Word256
 
 import Types
 
@@ -26,7 +22,7 @@ add x z = replace ((+ x) . current $ z) z
 -- replace the active decks status with 'b'
 deckReplace :: Bool -> Decks -> Decks
 deckReplace b z =
-  let f (DeckInfo a _ c d) = DeckInfo a b c d
+  let f (DeckInfo a _ c d e) = DeckInfo a b c d e
    in replace (f $ current z) z
 
 first :: (a -> t) -> (a, b, c) -> (t, b, c)
@@ -42,11 +38,7 @@ zipNE3 :: NE.NonEmpty a -> NE.NonEmpty b -> NE.NonEmpty c -> NE.NonEmpty (a,b,c)
 zipNE3 ~(x NE.:| xs) ~(y NE.:| ys) ~(z NE.:| zs) = (x, y, z) NE.:| zip3 xs ys zs
 
 showOperatingMode :: OperatingMode -> String
-showOperatingMode = \case
-  FileLoader fl -> BSC8.unpack fl
-  InputAsHash ih -> BSC8.unpack ih
-  QueueBuffer qb -> showZipper qb
-  TreatAsBitstring w256 -> showHexWord256 w256
+showOperatingMode = show
 
 showZipper :: Show a => Zipper a -> String
 showZipper z = 

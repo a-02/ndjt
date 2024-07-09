@@ -28,42 +28,14 @@ drawFileLoader = do
         ]
   liftIO $ update vty (picForImage $ colorImage primaryColors textBlock)
 
-drawBitstring :: App ()
-drawBitstring = do
-  st <- get
-  let textBlock = T.unlines
-        [ "You are in Bitstring mode."
-        , T.pack ("---> " ++  showOperatingMode st.mode)
-        , showDecks st.deckSwitches
-        ]
-  vty <- (.vty) <$> ask
-  liftIO $ update vty (picForImage $ colorImage (hungryRotate 1 primaryColors) textBlock)
+drawSample :: App ()
+drawSample = undefined
 
-drawQueueBuffer :: App ()
-drawQueueBuffer = do
-  vty <- (.vty) <$> ask
-  st <- get
-  let decks = st.deckSwitches
-      textBlock = T.unlines
-        [ "You are in Queue Buffer mode."
-        , T.pack ("---> " ++ showOperatingMode st.mode)
-        , T.pack . show $ (\DeckInfo{..} -> udpSocket conn) <$> decks
-        , showDecks st.deckSwitches
-        ]
-  liftIO $ update vty (picForImage $ colorImage (hungryRotate 2 primaryColors) textBlock)
+drawController :: App ()
+drawController = undefined
 
-drawInputHash :: App ()
-drawInputHash = do
-  vty <- (.vty) <$> ask
-  st <- get
-  let textBlock = T.unlines
-        [ "You are in Adler-32 mode."
-        , "MESSAGE --> " `T.append` T.pack (showOperatingMode st.mode)
-        -- ugh
-        , "ADLER32 --> " `T.append` (T.pack . show . adler32 . BSC8.pack $ showOperatingMode st.mode)
-        , showDecks st.deckSwitches
-        ]
-  liftIO $ update vty (picForImage $ colorImage (hungryRotate 3 primaryColors) textBlock)
+drawSynth :: App ()
+drawSynth = undefined
 
 drawLanding :: Vty -> [T.Text] -> IO ()
 drawLanding vty decks = do

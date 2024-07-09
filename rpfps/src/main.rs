@@ -1,9 +1,8 @@
 use std::{
     collections::HashMap,
-    env,
     error::Error,
     fs::File,
-    io::{self, BufReader, Write},
+    io::{BufReader, Write},
 };
 
 use zip::ZipArchive;
@@ -15,7 +14,6 @@ use quick_xml::{events::Event, Reader};
 use glob::glob;
 
 use serde::Serialize;
-use toml::ser;
 
 const BUF_SIZE: usize = 4096; // 4kb at once
 

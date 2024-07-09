@@ -50,4 +50,5 @@ failParseError :: String -> ByteString
 failParseError e =
   "command line parsing failed, returned Fail: " `BSC8.append` BSC8.pack e
 
-
+readXRNSFromTmp :: IO [XRNS]
+readXRNSFromTmp = undefined

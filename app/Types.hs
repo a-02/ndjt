@@ -1,15 +1,13 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 
 module Types where
 
 import Control.Monad.Trans.RWS.Strict
 
-import Data.ByteString.Char8 as BSC8
 import Data.List.NonEmpty.Zipper
 import Data.Text as T
-import Data.WideWord.Word256
+import qualified Data.Map as Map
 import Data.Word
 
 import Graphics.Vty
@@ -23,10 +21,11 @@ import System.IO
 type App = RWST XRDJInfo () XRDJState IO
 
 data OperatingMode
-  = FileLoader BSC8.ByteString
-  | InputAsHash BSC8.ByteString
-  | TreatAsBitstring Word256
-  | QueueBuffer (Zipper Int)
+  = FileLoader
+  | Controller
+  | Synth
+  | Sample
+  deriving (Show)
 
 type Decks = Zipper DeckInfo
 
@@ -51,6 +50,7 @@ data DeckInfo = DeckInfo
   , active :: Bool
   , home :: T.Text
   , arg :: XRDJArg
+  , xrns :: XRNS
   }
 
 data XRDJArg = XRDJArg
@@ -60,6 +60,8 @@ data XRDJArg = XRDJArg
   , argPort :: Word16
   , argText :: T.Text
   } deriving (Show)
+
+type DeckAvailableFiles = Map.Map DeckName [XRNSName]
 
 data XRDJState = XRDJState
   { deckSwitches :: Decks
@@ -72,8 +74,24 @@ data XRDJInfo = XRDJInfo
   , logNetworkHandle :: Handle
   }
 
+-- should be argText from XRDJArg
+type DeckName = T.Text 
+
+-- should be name from XRNS
+type XRNSName = T.Text
+
 data XRNS = XRNS
   { name :: T.Text
   , bpm :: Float
   , loopCoeff :: Int
+  , tracks :: [Track]
+  }
+
+data TrackMuteState = Active | Off | Muted
+data TrackType = Sequencer | Master | Send | Group
+data Track = Track
+  { trackName :: T.Text
+  , trackType :: TrackType
+  , trackMuteState :: TrackMuteState
+  , trackColor :: Color 
   }
